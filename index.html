@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- HEADER -->
+    <header id="header">
+      <div class="header-left">
+        <div class="logo-mark">⬡</div>
+        <div>
+          <div class="app-title">CONTROL PLAYGROUND</div>
+          <div class="app-subtitle">Process Control Simulation Environment</div>
+        </div>
+      </div>
+      <div class="header-center">
+        <div class="sim-status" id="simStatus">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusLabel">STOPPED</span>
+        </div>
+        <div class="sim-time">
+          <span class="label">SIM TIME</span>
+          <span class="value mono" id="simTimeDisplay">0.0 s</span>
+        </div>
+        <div class="sim-time">
+          <span class="label">STEP</span>
+          <span class="value mono" id="stepDisplay">0</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <!-- Time Controls -->
+        <div class="time-controls">
+          <button class="btn btn-primary" id="btnStart">▶ START</button>
+          <button class="btn btn-warn" id="btnStop">■ STOP</button>
+          <button class="btn btn-ghost" id="btnReset">↺ RESET</button>
+          <div class="speed-control">
+            <span class="label">SPEED</span>
+            <input type="range" id="speedSlider" min="0.1" max="10" step="0.1" value="1.0">
+            <span class="mono" id="speedLabel">1.0×</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN GRID -->
+    <main id="mainGrid">
+
+      <!-- ── COLUMN 1: PROCESS ── -->
+      <section class="panel" id="panelProcess">
+        <div class="panel-header">
+          <span class="panel-tag">01</span>
+          <span class="panel-title">PROCESS</span>
+          <span class="panel-badge" id="processBadge">TANK LEVEL</span>
+        </div>
+        <div class="panel-body">
+          <!-- Process Selector -->
+          <div class="field-group">
+            <label class="field-label">Process Model</label>
+            <div class="seg-control" id="processSelector">
+              <button class="seg active" data-process="tank">Tank Level</button>
+              <button class="seg" data-process="heat">Heat Exchanger</button>
+              <button class="seg" data-process="custom">Custom</button>
+            </div>
+          </div>
+
+          <!-- Process Inputs -->
+          <div id="processInputs" class="inputs-list"></div>
+
+          <!-- Custom Code Editor -->
+          <div id="customProcessEditor" class="code-editor-wrap hidden">
+            <div class="code-label">Custom Process Code <span class="code-hint">(JS function)</span></div>
+            <textarea class="code-editor" id="customProcessCode" spellcheck="false" rows="12"></textarea>
+            <button class="btn btn-sm btn-primary" id="btnApplyProcess">APPLY</button>
+            <div class="code-error" id="processCodeError"></div>
+          </div>
+
+          <!-- Process Outputs -->
+          <div class="divider"></div>
+          <div class="field-label">Process Outputs → Sampler</div>
+          <div id="processOutputs" class="outputs-list"></div>
+        </div>
+      </section>
+
+      <!-- ── COLUMN 2: VISUALS ── -->
+      <section class="panel panel-wide" id="panelVisuals">
+        <div class="panel-header">
+          <span class="panel-tag">02</span>
+          <span class="panel-title">LIVE VISUALS</span>
+          <div class="panel-controls-inline">
+            <button class="btn btn-xs btn-ghost" id="btnClearPlots">CLEAR</button>
+          </div>
+        </div>
+        <div class="panel-body visuals-body">
+
+          <!-- Process-specific graphic -->
+          <div class="visual-graphic-wrap" id="visualGraphicWrap">
+            <canvas id="processGraphic" width="400" height="220"></canvas>
+          </div>
+
+          <!-- Trend charts -->
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-label">Process Variable (PV) &amp; Setpoint (SP)</div>
+              <canvas id="chartPV" height="100"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-label">Controller Output (CO)</div>
+              <canvas id="chartCO" height="80"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-label">Error (SP − PV)</div>
+              <canvas id="chartError" height="80"></canvas>
+            </div>
+          </div>
+
+          <!-- Live gauges -->
+          <div class="gauges-row" id="gaugesRow"></div>
+
+        </div>
+      </section>
+
+      <!-- ── COLUMN 3: SAMPLER + CONTROLLER + MODELER ── -->
+      <div class="right-col">
+
+        <!-- SAMPLER -->
+        <section class="panel" id="panelSampler">
+          <div class="panel-header">
+            <span class="panel-tag">03</span>
+            <span class="panel-title">SAMPLER</span>
+          </div>
+          <div class="panel-body panel-body-compact">
+            <div class="field-row">
+              <div class="field-group half">
+                <label class="field-label">Sample Rate (Hz)</label>
+                <input class="field-input mono" type="number" id="sampleRate" value="10" min="0.1" max="100" step="0.1">
+              </div>
+              <div class="field-group half">
+                <label class="field-label">Noise σ</label>
+                <input class="field-input mono" type="number" id="noiseLevel" value="0.0" min="0" max="10" step="0.01">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-group half">
+                <label class="field-label">Dead Time (s)</label>
+                <input class="field-input mono" type="number" id="deadTime" value="0.0" min="0" max="30" step="0.1">
+              </div>
+              <div class="field-group half">
+                <label class="field-label">Filter τ (s)</label>
+                <input class="field-input mono" type="number" id="filterTau" value="0.0" min="0" max="30" step="0.1">
+              </div>
+            </div>
+            <div class="sampler-live">
+              <span class="label">SAMPLED PV</span>
+              <span class="big-value mono" id="sampledPV">—</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- CONTROLLER -->
+        <section class="panel" id="panelController">
+          <div class="panel-header">
+            <span class="panel-tag">04</span>
+            <span class="panel-title">CONTROLLER</span>
+            <span class="panel-badge" id="controllerBadge">PID</span>
+          </div>
+          <div class="panel-body panel-body-compact">
+            <div class="field-group">
+              <label class="field-label">Algorithm</label>
+              <div class="seg-control" id="controllerSelector">
+                <button class="seg active" data-controller="pid">PID</button>
+                <button class="seg" data-controller="bangbang">Bang-Bang</button>
+                <button class="seg" data-controller="custom">Custom</button>
+              </div>
+            </div>
+
+            <div id="controllerParams"></div>
+
+            <!-- Setpoint -->
+            <div class="field-row">
+              <div class="field-group half">
+                <label class="field-label">Setpoint (SP)</label>
+                <input class="field-input mono" type="number" id="setpoint" value="50" step="0.5">
+              </div>
+              <div class="field-group half">
+                <label class="field-label">CO Output</label>
+                <div class="live-output mono" id="coOutput">—</div>
+              </div>
+            </div>
+
+            <!-- Custom Code Editor -->
+            <div id="customControllerEditor" class="code-editor-wrap hidden">
+              <div class="code-label">Custom Controller Code</div>
+              <textarea class="code-editor" id="customControllerCode" spellcheck="false" rows="10"></textarea>
+              <button class="btn btn-sm btn-primary" id="btnApplyController">APPLY</button>
+              <div class="code-error" id="controllerCodeError"></div>
+            </div>
+
+            <!-- Controller→Process wiring -->
+            <div class="divider"></div>
+            <div class="field-label">CO → Process Input</div>
+            <select class="field-select" id="coTargetInput"></select>
+          </div>
+        </section>
+
+        <!-- MODELER -->
+        <section class="panel" id="panelModeler">
+          <div class="panel-header">
+            <span class="panel-tag">05</span>
+            <span class="panel-title">MODELER</span>
+            <div class="toggle-wrap">
+              <label class="toggle">
+                <input type="checkbox" id="modelEnabled">
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="label">USE MODEL</span>
+            </div>
+          </div>
+          <div class="panel-body panel-body-compact">
+            <div class="field-group">
+              <label class="field-label">Model Type</label>
+              <div class="seg-control" id="modelSelector">
+                <button class="seg active" data-model="fopdt">FOPDT</button>
+                <button class="seg" data-model="sopdt">SOPDT</button>
+                <button class="seg" data-model="arx">ARX</button>
+              </div>
+            </div>
+            <div id="modelParams"></div>
+            <div class="model-actions">
+              <button class="btn btn-sm btn-ghost" id="btnFitModel">⚙ AUTO-FIT</button>
+              <button class="btn btn-sm btn-ghost" id="btnResetModel">↺ RESET</button>
+            </div>
+            <div class="model-fit-info" id="modelFitInfo"></div>
+          </div>
+        </section>
+
+      </div><!-- end right-col -->
+
+    </main><!-- end mainGrid -->
+
+  </div><!-- end app -->
+
+  <!-- Scripts -->
+  <script src="./core.js"></script>
+  <script src="./processes.js"></script>
+  <script src="./sampler.js"></script>
+  <script src="./controller.js"></script>
+  <script src="./modeler.js"></script>
+  <script src="./visuals.js"></script>
+  <script src="./ui.js"></script>
+</body>
+</html>
