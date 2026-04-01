@@ -56,21 +56,15 @@ function buildProcessInputs(processId) {
       $(`val_${inp.id}`).textContent = parseFloat(e.target.value).toFixed(3);
     });
 
-    // Source toggle
+    // Source toggle — route through shared setCoTarget so both panels stay in sync
     div.querySelectorAll('.src-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        div.querySelectorAll('.src-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
         const src = btn.dataset.src;
         if (src === 'controller') {
-          UIState.coTargetInputId = inp.id;
-          slider.classList.add('controller-driven');
-          slider.disabled = true;
-          $('coTargetInput').value = inp.id;
+          setCoTarget(inp.id);
         } else {
-          if (UIState.coTargetInputId === inp.id) UIState.coTargetInputId = null;
-          slider.classList.remove('controller-driven');
-          slider.disabled = false;
+          // Only clear if this input currently owns the controller output
+          if (UIState.coTargetInputId === inp.id) setCoTarget(null);
         }
       });
     });
@@ -116,10 +110,46 @@ function buildProcessOutputs(processId) {
     opt.textContent = `${inp.name} (${inp.unit})`;
     sel.appendChild(opt);
   });
-  if (!UIState.coTargetInputId && proc.inputs.length > 0) {
-    UIState.coTargetInputId = proc.inputs.find(i => i.controlTarget)?.id || proc.inputs[0].id;
-    sel.value = UIState.coTargetInputId;
-  }
+  // Always reset to the default control target for this process
+  const defaultTarget = proc.inputs.find(i => i.controlTarget)?.id || proc.inputs[0].id;
+  // Defer so buildProcessInputs DOM is fully in place before setCoTarget queries it
+  setTimeout(() => setCoTarget(defaultTarget), 0);
+}
+
+/**
+ * Single source of truth for which process input the controller drives.
+ * Pass null to release controller control entirely.
+ * Updates: UIState, all MANUAL/CONTROLLER buttons, all sliders, and the dropdown.
+ */
+function setCoTarget(inputId) {
+  UIState.coTargetInputId = inputId;
+
+  // ── Sync the Process panel buttons & sliders ──
+  const proc = Processes.getCurrent();
+  proc.inputs.forEach(inp => {
+    const div = document.querySelector(`.input-item[data-input-id="${inp.id}"]`);
+    if (!div) return;
+    const slider = div.querySelector(`#slider_${inp.id}`);
+    const manualBtn = div.querySelector('.src-btn[data-src="manual"]');
+    const ctrlBtn   = div.querySelector('.src-btn[data-src="controller"]');
+    if (!slider || !manualBtn || !ctrlBtn) return;
+
+    if (inp.id === inputId) {
+      ctrlBtn.classList.add('active');
+      manualBtn.classList.remove('active');
+      slider.classList.add('controller-driven');
+      slider.disabled = true;
+    } else {
+      manualBtn.classList.add('active');
+      ctrlBtn.classList.remove('active');
+      slider.classList.remove('controller-driven');
+      slider.disabled = false;
+    }
+  });
+
+  // ── Sync the Controller dropdown ──
+  const sel = $('coTargetInput');
+  if (sel) sel.value = inputId ?? '';
 }
 
 function buildControllerParams(algId) {
@@ -450,7 +480,7 @@ function init() {
 
   // ── CO target input (dropdown) ──
   $('coTargetInput').addEventListener('change', e => {
-    UIState.coTargetInputId = e.target.value;
+    setCoTarget(e.target.value);
   });
 
   // ── Sampler params ──
