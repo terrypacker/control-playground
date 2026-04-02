@@ -105,6 +105,173 @@ const Processes = (() => {
       },
     },
 
+    // ── Solar Battery Grid-Tie System ─────────────────────────────────────────
+    solarBattery: {
+      name: 'Solar Battery System',
+      description: 'Solar panel array with battery storage, home load, and grid-tie sale optimization',
+
+      // ── INPUTS ──────────────────────────────────────────────────────────────
+      inputs: [
+        // Controllable
+        { id: 'gridSaleRatio',  name: 'Grid Sale Ratio',      unit: '0-1',   default: 0.8,   min: 0,    max: 1,      controlTarget: true  },
+        { id: 'battChargeRate', name: 'Battery Charge Rate',  unit: 'kW',    default: 5.0,   min: 0,    max: 10,     controlTarget: true  },
+
+        // Physical / environment
+        { id: 'solarRadiation', name: 'Solar Radiation',      unit: 'W/m²',  default: 800,   min: 0,    max: 1200,   controlTarget: false },
+        { id: 'panelMaxOutput', name: 'Panel Array Max',      unit: 'kW',    default: 10.0,  min: 1,    max: 100,    controlTarget: false },
+        { id: 'homeLoad',       name: 'Home Load',            unit: 'kW',    default: 2.5,   min: 0,    max: 20,     controlTarget: false },
+        { id: 'battCapacity',   name: 'Battery Capacity',     unit: 'kWh',   default: 20.0,  min: 1,    max: 200,    controlTarget: false },
+        { id: 'battEfficiency', name: 'Battery Round-Trip η', unit: '0-1',   default: 0.92,  min: 0.5,  max: 1.0,    controlTarget: false },
+
+        // Pricing
+        { id: 'baseSalePrice',  name: 'Base Sale Price',      unit: '$/kWh', default: 0.12,  min: 0,    max: 1.0,    controlTarget: false },
+        { id: 'peakMultiplier', name: 'Peak Price Multiplier',unit: 'x',     default: 2.5,   min: 1.0,  max: 5.0,    controlTarget: false },
+      ],
+
+      // ── OUTPUTS ─────────────────────────────────────────────────────────────
+      outputs: [
+        { id: 'solarPower',     name: 'Solar Power Generated', unit: 'kW',    min: 0,    max: 100   },
+        { id: 'batterySOC',     name: 'Battery State of Charge', unit: 'kWh', min: 0,    max: 200   },
+        { id: 'gridExport',     name: 'Power Exported to Grid', unit: 'kW',   min: 0,    max: 100   },
+        { id: 'gridImport',     name: 'Power Imported from Grid', unit: 'kW', min: 0,    max: 20    },
+        { id: 'currentPrice',   name: 'Current Sale Price',    unit: '$/kWh', min: 0,    max: 1.0   },
+        { id: 'moneyEarned',    name: 'Revenue (session)',     unit: '$',     min: -999, max: 9999  },
+        { id: 'timeOfDay',      name: 'Time of Day',           unit: 'hr',    min: 0,    max: 24    },
+      ],
+
+      // ── STATE ────────────────────────────────────────────────────────────────
+      state: {
+        batterySOC:  10.0,   // kWh — starts partially charged
+        moneyEarned: 0.0,    // cumulative $ this session
+        timeOfDay:   6.0,    // hr — start at 6 AM
+        solarPower:  0.0,
+        gridExport:  0.0,
+        gridImport:  0.0,
+        currentPrice: 0.12,
+      },
+
+      // ── CONSTANTS ────────────────────────────────────────────────────────────
+      STC_RADIATION: 1000,   // W/m² — Standard Test Condition irradiance
+      DAY_DURATION:  24,     // hr — simulated day length
+      SOLAR_PEAK_HR: 12.0,   // hr — solar noon
+      SOLAR_HALF_WIDTH: 6.0, // hr — half-width of daylight window (6 AM – 6 PM)
+
+      // Time-of-use price windows (hour ranges, multiplier applied to baseSalePrice)
+      //   Morning peak: 06:00–09:00
+      //   Midday trough: 09:00–16:00  (solar oversupply depresses price)
+      //   Evening peak:  16:00–21:00
+      //   Off-peak:      21:00–06:00
+      _priceMultiplierAt(hour, peakMultiplier) {
+        if (hour >= 6  && hour < 9)  return peakMultiplier;          // morning peak
+        if (hour >= 9  && hour < 16) return 0.7;                     // midday solar trough
+        if (hour >= 16 && hour < 21) return peakMultiplier;          // evening peak
+        return 0.5;                                                   // overnight off-peak
+      },
+
+      // Sinusoidal solar radiation curve — peaks at solar noon, zero overnight
+      _solarFraction(hour) {
+        const offset = hour - this.SOLAR_PEAK_HR;
+        if (Math.abs(offset) >= this.SOLAR_HALF_WIDTH) return 0;
+        // Raised cosine over the daylight window
+        return Math.cos((offset / this.SOLAR_HALF_WIDTH) * (Math.PI / 2)) ** 2;
+      },
+
+      reset() {
+        this.state = {
+          batterySOC:   10.0,
+          moneyEarned:  0.0,
+          timeOfDay:    6.0,
+          solarPower:   0.0,
+          gridExport:   0.0,
+          gridImport:   0.0,
+          currentPrice: 0.12,
+        };
+      },
+
+      // ── STEP ─────────────────────────────────────────────────────────────────
+      // dt : seconds of real/simulated time per step
+      step(inputs, dt) {
+        const {
+          solarRadiation, panelMaxOutput,
+          homeLoad, battCapacity, battEfficiency,
+          gridSaleRatio, battChargeRate,
+          baseSalePrice, peakMultiplier,
+        } = inputs;
+
+        const dtHr = dt / 3600; // seconds → hours for energy (kWh) calculations
+
+        // ── 1. Advance simulated clock ──────────────────────────────────────
+        this.state.timeOfDay = (this.state.timeOfDay + dtHr) % this.DAY_DURATION;
+        const hour = this.state.timeOfDay;
+
+        // ── 2. Solar power available ────────────────────────────────────────
+        // Scale panel output by the ratio of actual irradiance to STC,
+        // then further attenuate by the time-of-day sun angle curve.
+        const irradianceFraction = Math.min(solarRadiation / this.STC_RADIATION, 1);
+        const solarFraction      = this._solarFraction(hour);
+        const solarPower         = panelMaxOutput * irradianceFraction * solarFraction; // kW
+        this.state.solarPower    = solarPower;
+
+        // ── 3. Time-of-use sale price ───────────────────────────────────────
+        const currentPrice        = baseSalePrice * this._priceMultiplierAt(hour, peakMultiplier);
+        this.state.currentPrice   = currentPrice;
+
+        // ── 4. Energy routing ───────────────────────────────────────────────
+        //   Priority: home load → battery charge → grid export
+        let available = solarPower; // kW remaining after each allocation
+
+        // 4a. Serve home load first (import from grid if solar insufficient)
+        const servedBySolar = Math.min(available, homeLoad);
+        available          -= servedBySolar;
+        const deficit       = homeLoad - servedBySolar;       // kW still needed
+        const gridImport    = deficit;                        // pulled from grid
+        this.state.gridImport = gridImport;
+
+        // 4b. Charge battery with remaining solar (up to battChargeRate cap)
+        let soc          = this.state.batterySOC;
+        const headroom   = Math.max(0, battCapacity - soc);   // kWh of empty space
+        const chargeKW   = Math.min(available, battChargeRate, headroom / dtHr);
+        const chargeKWh  = chargeKW * dtHr * battEfficiency;  // account for round-trip loss
+        soc             += chargeKWh;
+        available       -= chargeKW;
+
+        // 4c. Remaining solar → export to grid scaled by gridSaleRatio
+        //     (ratio < 1 means operator is holding some capacity back)
+        const directExport = available * gridSaleRatio;
+
+        // 4d. Optionally discharge battery to grid during high-price windows
+        //     Discharge only if price is above base (i.e., peak window)
+        let battDischargeKW = 0;
+        if (currentPrice > baseSalePrice && soc > 0) {
+          const maxDischarge  = Math.min(battChargeRate, soc / dtHr);
+          battDischargeKW     = maxDischarge * gridSaleRatio;
+          const dischargeKWh  = battDischargeKW * dtHr;
+          soc                = Math.max(0, soc - dischargeKWh);
+        }
+
+        this.state.batterySOC = Math.min(soc, battCapacity);
+
+        // ── 5. Total grid export & revenue ─────────────────────────────────
+        const gridExport = directExport + battDischargeKW;
+        this.state.gridExport = gridExport;
+
+        const revenueStep    = gridExport * currentPrice * dtHr;   // $ this step
+        const importCostStep = gridImport * currentPrice * dtHr;   // $ paid for import
+        this.state.moneyEarned += revenueStep - importCostStep;
+
+        // ── 6. Return all outputs ───────────────────────────────────────────
+        return {
+          solarPower:   this.state.solarPower,
+          batterySOC:   this.state.batterySOC,
+          gridExport:   this.state.gridExport,
+          gridImport:   this.state.gridImport,
+          currentPrice: this.state.currentPrice,
+          moneyEarned:  this.state.moneyEarned,
+          timeOfDay:    this.state.timeOfDay,
+        };
+      },
+    },
+
     // ── 3. Custom ────────────────────────────────────────
     custom: {
       name: 'Custom Process',

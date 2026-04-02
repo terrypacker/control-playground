@@ -74,7 +74,7 @@ const Core = (() => {
   }
 
   function setSpeed(v) {
-    state.speed = Math.max(0.1, Math.min(20, v));
+    state.speed = Math.max(0.1, v);
   }
 
   function pushHistory(record) {

@@ -459,6 +459,436 @@ const Visuals = (() => {
     ctx.fillText('HEAT EXCHANGER', W / 2, 14);
   }
 
+  function drawSolarBatteryGraphic(canvas, state, inputs) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    // Unpack state & inputs with safe defaults
+    const solarPower    = state.solarPower    ?? 0;
+    const batterySOC    = state.batterySOC    ?? 0;
+    const gridExport    = state.gridExport    ?? 0;
+    const gridImport    = state.gridImport    ?? 0;
+    const moneyEarned   = state.moneyEarned   ?? 0;
+    const currentPrice  = state.currentPrice  ?? 0;
+    const timeOfDay     = state.timeOfDay     ?? 12;
+
+    const panelMaxOutput = inputs.panelMaxOutput ?? 10;
+    const battCapacity   = inputs.battCapacity   ?? 20;
+    const homeLoad       = inputs.homeLoad       ?? 2.5;
+
+    const solarFrac  = clamp(solarPower  / panelMaxOutput, 0, 1);
+    const battFrac   = clamp(batterySOC  / battCapacity,   0, 1);
+    const exportFrac = clamp(gridExport  / panelMaxOutput, 0, 1);
+    const importFrac = clamp(gridImport  / homeLoad,       0, 1);
+
+    // ── Layout regions ───────────────────────────────────────────────────────
+    //   [SUN]  [PANELS]  [HOUSE]  [BATTERY]  [GRID POLE]
+    const midY      = H * 0.42;   // vertical centre line for all components
+    const sunCX     = W * 0.08;
+    const sunCY     = H * 0.22;
+    const panelX    = W * 0.18;
+    const panelY    = H * 0.12;
+    const panelW    = W * 0.18;
+    const panelH    = H * 0.28;
+    const houseX    = W * 0.42;
+    const houseY    = H * 0.18;
+    const houseW    = W * 0.16;
+    const houseH    = H * 0.26;
+    const battX     = W * 0.62;
+    const battY     = H * 0.14;
+    const battW     = W * 0.09;
+    const battH     = H * 0.34;
+    const poleX     = W * 0.88;
+    const poleTopY  = H * 0.10;
+    const poleBotY  = H * 0.72;
+
+    // ── Sky gradient ─────────────────────────────────────────────────────────
+    const dayFrac = clamp(solarFrac, 0, 1);
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H * 0.75);
+    const nightTop  = '#0a0e1a', nightBot  = '#1a2035';
+    const dayTop    = '#1a6fba', dayBot    = '#5ab4e8';
+    function blendHex(a, b, t) {
+      const p = (h) => parseInt(h, 16);
+      const r = (s, i) => parseInt(s.slice(i, i+2), 16);
+      const bl = (ca, cb) => Math.round(lerp(r(ca,1), r(cb,1), t)).toString(16).padStart(2,'0');
+      return '#' + bl(a.slice(1,3), b.slice(1,3)) +
+          bl(a.slice(3,5), b.slice(3,5)) +
+          bl(a.slice(5,7), b.slice(5,7));
+    }
+    skyGrad.addColorStop(0, blendHex(nightTop, dayTop, dayFrac));
+    skyGrad.addColorStop(1, blendHex(nightBot, dayBot, dayFrac));
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H * 0.75);
+
+    // Ground
+    ctx.fillStyle = '#1a2a1a';
+    ctx.fillRect(0, H * 0.72, W, H * 0.28);
+    ctx.fillStyle = '#22361e';
+    ctx.fillRect(0, H * 0.72, W, H * 0.04);
+
+    // ── Title ────────────────────────────────────────────────────────────────
+    const hh = Math.floor(timeOfDay);
+    const mm = Math.floor((timeOfDay - hh) * 60);
+    const ampm = hh < 12 ? 'AM' : 'PM';
+    const hh12 = ((hh % 12) || 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 11px Share Tech Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SOLAR BATTERY SYSTEM', W / 2, 13);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '10px Share Tech Mono, monospace';
+    ctx.fillText(`${hh12}:${mm.toString().padStart(2,'0')} ${ampm}`, W / 2, 25);
+
+    // ── Sun ───────────────────────────────────────────────────────────────────
+    const sunR     = W * 0.055;
+    const sunAlpha = clamp(dayFrac * 1.2, 0, 1);
+    // Rays
+    ctx.save();
+    ctx.translate(sunCX, sunCY);
+    for (let i = 0; i < 8; i++) {
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = `rgba(255,200,50,${sunAlpha * 0.5})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, sunR + 4);
+      ctx.lineTo(0, sunR + 10);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Disc
+    const sunGrad = ctx.createRadialGradient(sunCX, sunCY, 0, sunCX, sunCY, sunR);
+    sunGrad.addColorStop(0, `rgba(255,230,100,${sunAlpha})`);
+    sunGrad.addColorStop(1, `rgba(255,160,20,${sunAlpha * 0.6})`);
+    ctx.beginPath();
+    ctx.arc(sunCX, sunCY, sunR, 0, Math.PI * 2);
+    ctx.fillStyle = sunGrad;
+    ctx.fill();
+    // Stars (night)
+    if (dayFrac < 0.5) {
+      const starAlpha = (0.5 - dayFrac) * 2;
+      ctx.fillStyle = `rgba(255,255,255,${starAlpha})`;
+      [[W*0.55,H*0.06],[W*0.65,H*0.03],[W*0.72,H*0.08],[W*0.80,H*0.05],[W*0.90,H*0.09],[W*0.45,H*0.04]].forEach(([sx,sy]) => {
+        ctx.beginPath(); ctx.arc(sx, sy, 1.2, 0, Math.PI*2); ctx.fill();
+      });
+    }
+
+    // ── Solar beam from sun → panels ─────────────────────────────────────────
+    if (solarFrac > 0.05) {
+      const beamAlpha = solarFrac * 0.45;
+      const beamGrad = ctx.createLinearGradient(sunCX + sunR, sunCY, panelX, panelY + panelH * 0.3);
+      beamGrad.addColorStop(0, `rgba(255,220,80,${beamAlpha})`);
+      beamGrad.addColorStop(1, `rgba(255,220,80,0)`);
+      ctx.strokeStyle = beamGrad;
+      ctx.lineWidth = Math.max(2, solarFrac * 8);
+      ctx.beginPath();
+      ctx.moveTo(sunCX + sunR, sunCY);
+      ctx.lineTo(panelX, panelY + panelH * 0.3);
+      ctx.stroke();
+    }
+
+    // ── Solar panel array ────────────────────────────────────────────────────
+    const rows = 3, cols = 2;
+    const cellW = panelW / cols - 3;
+    const cellH = panelH / rows - 4;
+    ctx.strokeStyle = '#1a2a3a';
+    ctx.lineWidth = 1;
+    // Panel frame
+    ctx.strokeStyle = '#2e3a4a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(panelX - 3, panelY - 3, panelW + 6, panelH + 6);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cx = panelX + c * (cellW + 3);
+        const cy = panelY + r * (cellH + 4);
+        // Panel cell fill — blue tint when active
+        const panelBright = lerp(0.08, 0.35, solarFrac);
+        ctx.fillStyle = `rgba(20,60,${Math.round(80 + solarFrac * 120)},${panelBright + 0.55})`;
+        ctx.fillRect(cx, cy, cellW, cellH);
+        // Grid lines on cell
+        ctx.strokeStyle = `rgba(100,180,255,${0.2 + solarFrac * 0.3})`;
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(cx, cy, cellW, cellH);
+        ctx.beginPath();
+        ctx.moveTo(cx + cellW/2, cy); ctx.lineTo(cx + cellW/2, cy + cellH);
+        ctx.moveTo(cx, cy + cellH/2); ctx.lineTo(cx + cellW, cy + cellH/2);
+        ctx.stroke();
+        // Glint when producing
+        if (solarFrac > 0.1) {
+          ctx.fillStyle = `rgba(255,255,255,${solarFrac * 0.18})`;
+          ctx.fillRect(cx + 2, cy + 2, cellW * 0.35, cellH * 0.35);
+        }
+      }
+    }
+    // Mount post
+    ctx.strokeStyle = '#2e3a4a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(panelX + panelW/2, panelY + panelH);
+    ctx.lineTo(panelX + panelW/2, H * 0.72);
+    ctx.stroke();
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PANELS', panelX + panelW/2, panelY + panelH + 14);
+    ctx.fillStyle = solarFrac > 0.05 ? '#f0d050' : 'rgba(255,255,255,0.35)';
+    ctx.fillText(solarPower.toFixed(1) + ' kW', panelX + panelW/2, panelY + panelH + 25);
+
+    // ── Flow: panels → house ─────────────────────────────────────────────────
+    const flowPH_y = midY - H * 0.02;
+    const homeLoadFrac = clamp(homeLoad / panelMaxOutput, 0, 1);
+    const flowingToHouse = solarFrac > 0.01 || importFrac > 0.01;
+    if (flowingToHouse) {
+      const fc = solarFrac > 0.01 ? solarFrac : importFrac;
+      ctx.strokeStyle = `rgba(255,210,50,${0.3 + fc * 0.55})`;
+      ctx.lineWidth = Math.max(1.5, fc * 5);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(panelX + panelW, flowPH_y);
+      ctx.lineTo(houseX, flowPH_y);
+      ctx.stroke();
+      // Animated flow dots
+      const t = (Date.now() / 600) % 1;
+      for (let i = 0; i < 3; i++) {
+        const ft = (t + i / 3) % 1;
+        const dx = lerp(panelX + panelW, houseX, ft);
+        ctx.beginPath();
+        ctx.arc(dx, flowPH_y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,230,80,${0.9 - ft * 0.5})`;
+        ctx.fill();
+      }
+    }
+
+    // ── House ────────────────────────────────────────────────────────────────
+    const roofPeak = { x: houseX + houseW/2, y: houseY };
+    // Roof
+    ctx.beginPath();
+    ctx.moveTo(houseX - 6, houseY + houseH * 0.35);
+    ctx.lineTo(roofPeak.x, roofPeak.y);
+    ctx.lineTo(houseX + houseW + 6, houseY + houseH * 0.35);
+    ctx.closePath();
+    ctx.fillStyle = '#8B3030';
+    ctx.fill();
+    ctx.strokeStyle = '#5a1f1f';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Walls
+    ctx.fillStyle = '#d4c5a0';
+    ctx.fillRect(houseX, houseY + houseH * 0.35, houseW, houseH * 0.65);
+    ctx.strokeStyle = '#a09070';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(houseX, houseY + houseH * 0.35, houseW, houseH * 0.65);
+    // Door
+    const dw = houseW * 0.22, dh = houseH * 0.32;
+    const dx_ = houseX + houseW/2 - dw/2;
+    const dy_ = houseY + houseH - dh;
+    ctx.fillStyle = '#5a3010';
+    ctx.fillRect(dx_, dy_, dw, dh);
+    // Windows — lit based on home load
+    const winBright = 0.4 + importFrac * 0.5;
+    ctx.fillStyle = `rgba(255,230,100,${winBright})`;
+    ctx.fillRect(houseX + houseW * 0.12, houseY + houseH * 0.45, houseW * 0.22, houseH * 0.18);
+    ctx.fillRect(houseX + houseW * 0.66, houseY + houseH * 0.45, houseW * 0.22, houseH * 0.18);
+    ctx.strokeStyle = '#8a7040';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(houseX + houseW * 0.12, houseY + houseH * 0.45, houseW * 0.22, houseH * 0.18);
+    ctx.strokeRect(houseX + houseW * 0.66, houseY + houseH * 0.45, houseW * 0.22, houseH * 0.18);
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('HOME', houseX + houseW/2, houseY + houseH + 14);
+    ctx.fillStyle = homeLoad > 0 ? '#e08040' : 'rgba(255,255,255,0.35)';
+    ctx.fillText(homeLoad.toFixed(1) + ' kW', houseX + houseW/2, houseY + houseH + 25);
+
+    // Grid import indicator (dashed red line from grid → house if importing)
+    if (gridImport > 0.05) {
+      ctx.strokeStyle = `rgba(230,80,80,${0.4 + importFrac * 0.5})`;
+      ctx.lineWidth = Math.max(1, importFrac * 3);
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(poleX - 10, midY + H * 0.08);
+      ctx.lineTo(houseX + houseW, midY + H * 0.08);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(230,80,80,0.85)';
+      ctx.font = '8px Share Tech Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('IMPORTING', (poleX + houseX + houseW) / 2, midY + H * 0.08 - 4);
+    }
+
+    // ── Flow: house → battery ────────────────────────────────────────────────
+    const chargingBatt = batterySOC < battCapacity && solarFrac > 0.05;
+    if (chargingBatt) {
+      const fc = solarFrac * 0.6;
+      ctx.strokeStyle = `rgba(50,200,130,${0.35 + fc * 0.5})`;
+      ctx.lineWidth = Math.max(1.5, fc * 4);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(houseX + houseW, midY - H * 0.06);
+      ctx.lineTo(battX, midY - H * 0.06);
+      ctx.stroke();
+      const t = (Date.now() / 700) % 1;
+      for (let i = 0; i < 2; i++) {
+        const ft = (t + i / 2) % 1;
+        const px_ = lerp(houseX + houseW, battX, ft);
+        ctx.beginPath();
+        ctx.arc(px_, midY - H * 0.06, 2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(50,220,130,0.9)`;
+        ctx.fill();
+      }
+    }
+
+    // ── Battery ───────────────────────────────────────────────────────────────
+    // Terminal nub
+    const termW = battW * 0.4, termH = battH * 0.025;
+    ctx.fillStyle = '#4a5060';
+    ctx.fillRect(battX + battW/2 - termW/2, battY - termH, termW, termH);
+    // Outer shell
+    ctx.fillStyle = '#2a3040';
+    ctx.strokeStyle = '#4a5a6a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(battX, battY, battW, battH, 4);
+    ctx.fill();
+    ctx.stroke();
+    // Fill level
+    const fillH = battH * 0.88 * battFrac;
+    const fillY = battY + battH * 0.88 - fillH + battH * 0.06;
+    const battColor = battFrac > 0.5 ? '#1D9E75' : battFrac > 0.2 ? '#BA7517' : '#E24B4A';
+    ctx.fillStyle = battColor;
+    ctx.beginPath();
+    ctx.roundRect(battX + 3, fillY, battW - 6, fillH, 2);
+    ctx.fill();
+    // Segment lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 0.5;
+    for (let i = 1; i < 5; i++) {
+      const sy = battY + battH * 0.06 + (battH * 0.88 / 5) * i;
+      ctx.beginPath(); ctx.moveTo(battX + 3, sy); ctx.lineTo(battX + battW - 3, sy); ctx.stroke();
+    }
+    // Charge indicator flash
+    if (chargingBatt) {
+      ctx.fillStyle = `rgba(255,255,255,${0.5 + Math.sin(Date.now() / 300) * 0.3})`;
+      ctx.font = 'bold 11px Share Tech Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡', battX + battW/2, battY + battH/2 + 4);
+    }
+    // Labels
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('BATT', battX + battW/2, battY + battH + 14);
+    ctx.fillStyle = battColor;
+    ctx.fillText(Math.round(battFrac * 100) + '%', battX + battW/2, battY + battH + 25);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(batterySOC.toFixed(1) + ' kWh', battX + battW/2, battY + battH + 36);
+
+    // ── Flow: battery/panels → grid ──────────────────────────────────────────
+    const exportY = midY + H * 0.02;
+    if (gridExport > 0.05) {
+      const fc = exportFrac;
+      ctx.strokeStyle = `rgba(255,200,50,${0.35 + fc * 0.5})`;
+      ctx.lineWidth = Math.max(1.5, fc * 5);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(battX + battW, exportY);
+      ctx.lineTo(poleX - 12, exportY);
+      ctx.stroke();
+      const t = (Date.now() / 500) % 1;
+      for (let i = 0; i < 3; i++) {
+        const ft = (t + i / 3) % 1;
+        const px_ = lerp(battX + battW, poleX - 12, ft);
+        ctx.beginPath();
+        ctx.arc(px_, exportY, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,220,60,0.9)`;
+        ctx.fill();
+      }
+    }
+
+    // ── Grid pole ────────────────────────────────────────────────────────────
+    // Pole
+    ctx.strokeStyle = '#4a4a3a';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTopY + 10);
+    ctx.lineTo(poleX, poleBotY);
+    ctx.stroke();
+    // Cross arm
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(poleX - W*0.05, poleTopY + 10);
+    ctx.lineTo(poleX + W*0.05, poleTopY + 10);
+    ctx.stroke();
+    // Insulators
+    [-1, 1].forEach(side => {
+      const ix = poleX + side * W * 0.04;
+      ctx.fillStyle = '#888';
+      ctx.beginPath(); ctx.arc(ix, poleTopY + 12, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    // Wires from insulators going off-screen
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    [-1, 1].forEach(side => {
+      const ix = poleX + side * W * 0.04;
+      ctx.beginPath();
+      ctx.moveTo(ix, poleTopY + 12);
+      ctx.quadraticCurveTo(ix + side * W * 0.03, poleTopY + 22, side > 0 ? W : 0, poleTopY + 18);
+      ctx.stroke();
+    });
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('GRID', poleX, poleBotY + 14);
+    const priceColor = currentPrice > inputs.baseSalePrice * 1.2 ? '#f0d050' :
+        currentPrice < inputs.baseSalePrice * 0.9 ? '#e08080' : '#80e0a0';
+    ctx.fillStyle = priceColor;
+    ctx.fillText('$' + currentPrice.toFixed(3) + '/kWh', poleX, poleBotY + 25);
+
+    // ── Price window label ───────────────────────────────────────────────────
+    const hr = state.timeOfDay;
+    let windowLabel = 'OFF-PEAK';
+    let windowColor = 'rgba(150,150,200,0.7)';
+    if (hr >= 6 && hr < 9)  { windowLabel = 'MORNING PEAK'; windowColor = 'rgba(240,200,60,0.85)'; }
+    else if (hr >= 9 && hr < 16)  { windowLabel = 'SOLAR TROUGH'; windowColor = 'rgba(80,180,120,0.75)'; }
+    else if (hr >= 16 && hr < 21) { windowLabel = 'EVENING PEAK'; windowColor = 'rgba(240,140,60,0.85)'; }
+    ctx.fillStyle = windowColor;
+    ctx.font = 'bold 10px Share Tech Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(windowLabel, W - 8, 13);
+
+    // ── Revenue readout ───────────────────────────────────────────────────────
+    const revenueColor = moneyEarned >= 0 ? '#39e080' : '#ff4455';
+    ctx.fillStyle = revenueColor;
+    ctx.font = 'bold 12px Share Tech Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText((moneyEarned >= 0 ? '+' : '') + '$' + moneyEarned.toFixed(3), 8, H * 0.72 + 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.fillText('SESSION REVENUE', 8, H * 0.72 + 25);
+
+    // ── Overflow / low battery warnings ──────────────────────────────────────
+    if (battFrac >= 0.98) {
+      ctx.fillStyle = 'rgba(240,200,50,0.85)';
+      ctx.font = 'bold 9px Share Tech Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('BATT FULL', battX + battW/2, battY - 8);
+    }
+    if (battFrac <= 0.05 && gridExport > 0.05) {
+      ctx.fillStyle = 'rgba(230,80,80,0.85)';
+      ctx.font = 'bold 9px Share Tech Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('LOW BATT', battX + battW/2, battY - 8);
+    }
+  }
+
   // ── Gauge Manager ─────────────────────────────────────
   const gauges = {};
 
@@ -540,6 +970,7 @@ const Visuals = (() => {
     if (!canvas) return;
     if (processId === 'tank') drawTankGraphic(canvas, state, inputs);
     else if (processId === 'heat') drawHeatExchangerGraphic(canvas, state, inputs);
+    else if (processId === 'solarBattery') drawSolarBatteryGraphic(canvas, state, inputs);
     else {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
