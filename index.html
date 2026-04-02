@@ -127,7 +127,6 @@
                 <span class="chart-legend-dot" style="background:var(--green)"></span>Model Output
                 &nbsp;vs&nbsp;
                 <span class="chart-legend-dot" style="background:var(--cyan)"></span>PV
-                <span style="color:var(--text-muted);font-size:9px;margin-left:8px">always running</span>
               </div>
               <canvas id="chartModel" height="80"></canvas>
             </div>
@@ -249,8 +248,16 @@
             <div class="model-fit-info" id="modelFitInfo"></div>
             <div class="divider"></div>
             <div class="sampler-live">
-              <span class="label">MODEL OUTPUT</span>
+              <span class="label">MODEL INPUT</span>
+              <span class="big-value mono" id="modelInputDisplay" style="color:var(--cyan)">—</span>
+            </div>
+            <div class="sampler-live">
+              <span class="label">MODEL VALUE</span>
               <span class="big-value mono" id="modelOutputDisplay" style="color:var(--green)">—</span>
+            </div>
+            <div class="sampler-live">
+              <span class="label">PROCESS VALUE</span>
+              <span class="big-value mono" id="processOutputDisplay" style="color:var(--cyan)">—</span>
             </div>
           </div>
         </section>

@@ -92,6 +92,7 @@ const Modeler = (() => {
   let current = 'fopdt';
   let enabled = false;
   let _modelOutput = 0;
+  let _modelInput = 0;
 
   function getCurrent() { return models[current]; }
   function getCurrentId() { return current; }
@@ -112,6 +113,7 @@ const Modeler = (() => {
    * @returns {*|number|null}
    */
   function step(u, t, dt) {
+    _modelInput = u;
     const m = models[current];
     const params = {};
     for (const [k, v] of Object.entries(m.params)) params[k] = v.value;
@@ -120,6 +122,7 @@ const Modeler = (() => {
   }
 
   function getOutput() { return _modelOutput; }
+  function getInput() { return _modelInput; }
 
   function setParamValue(modelId, paramId, value) {
     if (models[modelId] && models[modelId].params[paramId]) {

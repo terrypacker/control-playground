@@ -316,6 +316,14 @@ Core.on('tick', ({ t, dt, step }) => {
     // CO display
     const coEl = $('coOutput');
     if (coEl) coEl.textContent = co.toFixed(3);
+
+    //Model display
+    const modelInputDisplay = $('modelInputDisplay');
+    if(modelInputDisplay) modelInputDisplay.textContent = modelIn ? modelIn.toFixed(3) : 'N/A';
+    const modelOutputDisplay = $('modelOutputDisplay');
+    if(modelOutputDisplay) modelOutputDisplay.textContent = modelOutput ? modelOutput.toFixed(3) : 'N/A';
+    const processOutputDisplay = $('processOutputDisplay');
+    if(processOutputDisplay) processOutputDisplay.textContent = sampledPV ? sampledPV.toFixed(3) : 'N/A';
   }
 
   // ── Process graphic (smooth-ish) ──
