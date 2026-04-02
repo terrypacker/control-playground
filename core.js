@@ -32,7 +32,7 @@ const Core = (() => {
     const wallDt = Math.min((timestamp - lastRAF) / 1000, 0.1); // cap at 100ms
     lastRAF = timestamp;
 
-    accumulator += wallDt * state.speed;
+    accumulator += (wallDt + state.dt) * state.speed;
 
     // Run simulation steps
     while (accumulator >= state.dt) {
@@ -77,6 +77,14 @@ const Core = (() => {
     state.speed = Math.max(0.1, v);
   }
 
+  /**
+   * Set the change of time stap
+   * @param dt
+   */
+  function setDt(dt) {
+    state.dt  = dt;
+  }
+
   function pushHistory(record) {
     state.history.push(record);
     if (state.history.length > state.maxHistory) {
@@ -84,5 +92,5 @@ const Core = (() => {
     }
   }
 
-  return { state, on, emit, start, stop, reset, setSpeed, pushHistory };
+  return { state, on, emit, start, stop, reset, setSpeed, setDt, pushHistory };
 })();

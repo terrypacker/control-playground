@@ -69,6 +69,7 @@ const Help = (() => {
         <tr><td>■ STOP</td><td>Pause. All values are frozen; nothing is lost.</td></tr>
         <tr><td>↺ RESET</td><td>Stop and clear all state, integrators, history, and trend plots.</td></tr>
         <tr><td>SPEED</td><td>Compresses or expands simulation time from 0.1× to 10×. Real-time is 1.0×.</td></tr>
+        <tr><td>TIME STEP</td><td>Adjust the time stepped on each iteration from +0.1 to +10.</td></tr>
       </table>
     `,
 

@@ -302,13 +302,13 @@ Core.on('tick', ({ t, dt, step }) => {
   Core.pushHistory(record);
 
   // ── Push to charts (throttled) ──
-  const chartEvery = Math.max(1, Math.round(1 / (Sampler.cfg.rate * Core.state.dt)));
+  const chartEvery = Math.max(.5, Math.round(1 / (Sampler.cfg.rate * Core.state.dt)));
   if (step % chartEvery === 0) {
     Visuals.push(record);
   }
 
   // ── Update gauges & outputs (every 10 ticks) ──
-  if (step % 10 === 0) {
+  if (step % chartEvery === 0) {
     proc.outputs.forEach(out => {
       const el = $('outVal_' + out.id);
       if (el && outputs[out.id] !== undefined) {
@@ -418,6 +418,11 @@ function init() {
     const v = parseFloat(e.target.value);
     Core.setSpeed(v);
     $('speedLabel').textContent = v.toFixed(1) + '×';
+  });
+  $('timeStepSlider').addEventListener('input', e => {
+    const dt = parseFloat(e.target.value);
+    Core.setDt(dt);
+    $('timeStepLabel').textContent = '+' + dt.toFixed(2);
   });
 
   // ── Process selector ──
