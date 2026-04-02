@@ -324,6 +324,7 @@ html, body {
   border: 1px solid var(--border-hi);
   border-radius: var(--radius);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .seg {
   flex: 1;
