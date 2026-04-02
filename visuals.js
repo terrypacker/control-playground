@@ -192,6 +192,7 @@ const Visuals = (() => {
 
   // ── Process Graphics ──────────────────────────────────
   function drawTankGraphic(canvas, state, inputs) {
+    const maxFlowRate = 20; //Just a guess for now
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
@@ -201,25 +202,26 @@ const Visuals = (() => {
     const fraction = level / maxLevel;
 
     const tankX = W * 0.30, tankW = W * 0.40;
-    const tankTop = H * 0.08, tankH = H * 0.72;
+    const tankTop = H * 0.2, tankH = H * 0.72;
     const tankBot = tankTop + tankH;
 
     // Inflow pipe
+    const pipeTop = 20;
     ctx.strokeStyle = '#2e3a50';
     ctx.lineWidth = 8;
     ctx.beginPath();
-    ctx.moveTo(tankX + tankW * 0.35, 0);
+    ctx.moveTo(tankX + tankW * 0.35, pipeTop);
     ctx.lineTo(tankX + tankW * 0.35, tankTop);
     ctx.stroke();
 
     // Draw flowing water (inflow animation)
     const qIn = inputs.qIn || 0;
     if (qIn > 0.1) {
-      const flowFrac = Math.min(1, qIn / 50);
+      const flowFrac = Math.min(1, qIn / maxFlowRate);
       ctx.strokeStyle = `rgba(0,212,232,${0.3 + flowFrac * 0.5})`;
       ctx.lineWidth = Math.max(2, flowFrac * 7);
       ctx.beginPath();
-      ctx.moveTo(tankX + tankW * 0.35, 0);
+      ctx.moveTo(tankX + tankW * 0.35, pipeTop);
       ctx.lineTo(tankX + tankW * 0.35, tankTop);
       ctx.stroke();
     }
@@ -309,7 +311,7 @@ const Visuals = (() => {
     // Outflow water
     const qOut = state.outflow || 0;
     if (qOut > 0.1) {
-      const flowFrac = Math.min(1, qOut / 50);
+      const flowFrac = Math.min(1, qOut / maxFlowRate);
       ctx.strokeStyle = `rgba(0,140,200,${0.3 + flowFrac * 0.5})`;
       ctx.lineWidth = Math.max(2, flowFrac * 7);
       ctx.beginPath();
@@ -334,8 +336,8 @@ const Visuals = (() => {
     ctx.fillStyle = '#6a7590';
     ctx.font = '10px Barlow Condensed';
     ctx.textAlign = 'center';
-    ctx.fillText('INFLOW', tankX + tankW * 0.35, H * 0.97);
-    ctx.fillText('DRAIN', drainX, H * 0.97);
+    ctx.fillText('INFLOW', (tankX + tankW * 0.35) + 20, pipeTop + 15);
+    ctx.fillText('DRAIN', drainX + 20, H * 0.97);
     ctx.fillText('TANK LEVEL PROCESS', W / 2, 14);
   }
 
