@@ -285,12 +285,12 @@ Core.on('tick', ({ t, dt, step }) => {
 
   // ── Step model ──
   const modelIn = inputs[UIState.coTargetInputId] ?? 0;
-  Modeler.step(modelIn, t, dt);
+  const modelOutput = Modeler.step(modelIn, t, dt);
 
   // ── Record history ──
   const sp = Controller.getSetpoint();
   const error = sp - sampledPV;
-  const record = { t, pv: sampledPV, sp, co, error };
+  const record = { t, pv: sampledPV, modelOutput, sp, co, error };
   Core.pushHistory(record);
 
   // ── Push to charts (throttled) ──

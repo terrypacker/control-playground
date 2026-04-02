@@ -104,8 +104,14 @@ const Modeler = (() => {
   function setEnabled(v) { enabled = v; }
   function isEnabled() { return enabled; }
 
+  /**
+   * We are always running the model, just potentially not using the output
+   * @param u
+   * @param t
+   * @param dt
+   * @returns {*|number|null}
+   */
   function step(u, t, dt) {
-    if (!enabled) return null;
     const m = models[current];
     const params = {};
     for (const [k, v] of Object.entries(m.params)) params[k] = v.value;

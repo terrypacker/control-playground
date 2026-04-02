@@ -53,9 +53,9 @@ const Visuals = (() => {
 
     draw() {
       const { canvas, ctx, data, data2 } = this;
-      const W = canvas.offsetWidth || canvas.width;
-      const H = canvas.offsetHeight || canvas.height;
-      if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+      const W = (canvas.offsetWidth > 0 ? canvas.offsetWidth : canvas.width);
+      const H = canvas.height; // always trust the HTML height attribute
+      if (canvas.offsetWidth > 0 && canvas.width !== W) { canvas.width = W; }
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = C.bg;
@@ -492,29 +492,29 @@ const Visuals = (() => {
   }
 
   // ── Trend Charts ──────────────────────────────────────
-  let chartPV, chartCO, chartError;
+  let chartPV, chartCO, chartError, chartModel;
   let _processId = 'tank';
   let _animFrame = null;
-  let _dirty = false;
 
   function init(processId) {
     _processId = processId;
 
-    chartPV    = new TrendChart(document.getElementById('chartPV'),
-      { color: C.cyan, color2: C.amber, label2: 'SP', windowSec: 120 });
-    chartCO    = new TrendChart(document.getElementById('chartCO'),
-      { color: C.purple, windowSec: 120 });
-    chartError = new TrendChart(document.getElementById('chartError'),
-      { color: C.red, windowSec: 120 });
+    const cvPV    = document.getElementById('chartPV');
+    const cvCO    = document.getElementById('chartCO');
+    const cvError = document.getElementById('chartError');
+    const cvModel = document.getElementById('chartModel');
 
-    // Start render loop
+    chartPV    = new TrendChart(cvPV,    { color: C.cyan,   color2: C.amber, windowSec: 120 });
+    chartCO    = new TrendChart(cvCO,    { color: C.purple, windowSec: 120 });
+    chartError = new TrendChart(cvError, { color: C.red,    windowSec: 120 });
+    chartModel = new TrendChart(cvModel, { color: C.green,  color2: C.cyan,  windowSec: 120 });
+
+    // Start render loop — redraw every frame so canvas resize is always caught
     function renderLoop() {
-      if (_dirty) {
-        chartPV.draw();
-        chartCO.draw();
-        chartError.draw();
-        _dirty = false;
-      }
+      chartPV.draw();
+      chartCO.draw();
+      chartError.draw();
+      chartModel.draw();
       _animFrame = requestAnimationFrame(renderLoop);
     }
     if (_animFrame) cancelAnimationFrame(_animFrame);
@@ -525,13 +525,14 @@ const Visuals = (() => {
     chartPV.push(record.t, record.pv, record.sp);
     chartCO.push(record.t, record.co);
     chartError.push(record.t, record.error);
-    _dirty = true;
+    chartModel.push(record.t, record.modelOutput ?? 0, record.pv);
   }
 
   function clearPlots() {
-    chartPV && chartPV.clear();
-    chartCO && chartCO.clear();
+    chartPV    && chartPV.clear();
+    chartCO    && chartCO.clear();
     chartError && chartError.clear();
+    chartModel && chartModel.clear();
   }
 
   function drawProcessGraphic(processId, state, inputs) {
