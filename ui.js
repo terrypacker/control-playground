@@ -259,10 +259,18 @@ Core.on('tick', ({ t, dt, step }) => {
   // ── Run sampler on the PREVIOUS output (so controller acts before process) ──
   const prevOutputs = Processes.getOutputs();
   const rawPV = prevOutputs[UIState.sampleOutputId] ?? 0;
-  const sampledPV = Sampler.update(rawPV, t, dt) ?? rawPV;
+  const samplePV = Sampler.update(rawPV, t, dt) ?? rawPV;
+
+  // ── Should we use real process or Model
+  let controllerInput;
+  if(Modeler.isEnabled() === true) {
+    controllerInput = Modeler.getOutput();
+  }else {
+    controllerInput = samplePV;
+  }
 
   // ── Run controller ──
-  const ctrlResult = Controller.compute(sampledPV, dt);
+  const ctrlResult = Controller.compute(controllerInput, dt);
   const co = ctrlResult.output;
 
   // ── Apply CO to target input ──
@@ -289,8 +297,8 @@ Core.on('tick', ({ t, dt, step }) => {
 
   // ── Record history ──
   const sp = Controller.getSetpoint();
-  const error = sp - sampledPV;
-  const record = { t, pv: sampledPV, modelOutput, sp, co, error };
+  const error = sp - controllerInput;
+  const record = { t, pv: controllerInput, modelOutput, sp, co, error };
   Core.pushHistory(record);
 
   // ── Push to charts (throttled) ──
@@ -311,7 +319,7 @@ Core.on('tick', ({ t, dt, step }) => {
 
     // Sampler display
     const pvEl = $('sampledPV');
-    if (pvEl) pvEl.textContent = sampledPV.toFixed(3);
+    if (pvEl) pvEl.textContent = controllerInput.toFixed(3);
 
     // CO display
     const coEl = $('coOutput');
@@ -323,7 +331,7 @@ Core.on('tick', ({ t, dt, step }) => {
     const modelOutputDisplay = $('modelOutputDisplay');
     if(modelOutputDisplay) modelOutputDisplay.textContent = modelOutput ? modelOutput.toFixed(3) : 'N/A';
     const processOutputDisplay = $('processOutputDisplay');
-    if(processOutputDisplay) processOutputDisplay.textContent = sampledPV ? sampledPV.toFixed(3) : 'N/A';
+    if(processOutputDisplay) processOutputDisplay.textContent = samplePV ? samplePV.toFixed(3) : 'N/A';
   }
 
   // ── Process graphic (smooth-ish) ──
@@ -363,6 +371,10 @@ Core.on('reset', () => {
   $('stepDisplay').textContent = '0';
   $('sampledPV').textContent = '—';
   $('coOutput').textContent = '—';
+  $('modelInputDisplay').textContent = '—';
+  $('modelOutputDisplay').textContent = '—';
+  $('processOutputDisplay').textContent = '—';
+
   Sampler.reset();
   Controller.reset();
   Modeler.reset();
