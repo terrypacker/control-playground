@@ -323,7 +323,7 @@ html, body {
   display: flex;
   border: 1px solid var(--border-hi);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow: auto;
 }
 .seg {
   flex: 1;
