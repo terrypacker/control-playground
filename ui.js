@@ -550,6 +550,40 @@ function init() {
     $('modelFitInfo').textContent = '';
   });
 
+  // ── Tune the PID controller using IMC-PID tuning rule: Kp = τ/(K·λ), Ki = 1/τ, where λ ≈ τ/3 ──
+  $('btnTunePIDController').addEventListener('click', () => {
+    const currentModel = Modeler.getCurrent();
+    const info = $('modelFitInfo');
+    const controllerPanel = $('panelController');
+    if(currentModel.name === 'FOPDT') {
+      const tau = currentModel.params.tau.value;
+      const K = currentModel.params.K.value;
+      const lambda = tau/3; //TODO Make 3 configurable
+      const kp = tau/(K * lambda);
+      const ki = 1/tau;
+
+      // Create and trigger the 'change' event
+      const event = new Event('change', { bubbles: true });
+
+      //Set the inputs for the PID controller
+      const kpInput = controllerPanel.querySelector('input[data-alg="pid"][data-param="Kp"]');
+      if(kpInput) {
+        kpInput.value = kp;
+        kpInput.dispatchEvent(event);
+      }
+
+      const kiInput = controllerPanel.querySelector('input[data-alg="pid"][data-param="Ki"]');
+      if(kiInput) {
+        kiInput.value = ki;
+        kiInput.dispatchEvent(event);
+      }
+
+      info.textContent = '✓ Controller Tuned. ' + 'Kp: ' + kp.toFixed(2) + ' Ki: ' + ki.toFixed(2);
+    }else {
+      info.textContent = '✗ unable to tune controller from model type ' + currentModel.name;
+    }
+  });
+
   // ── Set some sensible defaults for tank process ──
   // Tank level: SP = 1.0m (out of 2.5m)
   $('setpoint').value = 1.0;

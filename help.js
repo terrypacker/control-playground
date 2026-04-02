@@ -340,6 +340,14 @@ const Help = (() => {
         <li><span class="qs-text">Wait until the PV reaches a new steady state.</span></li>
         <li><span class="qs-text">Click <strong>AUTO-FIT</strong>. The estimated K, τ, and θ are written into the FOPDT fields.</span></li>
       </ol>
+      
+      <h3>TUNE</h3>
+      <p>
+        Uses the IMC-PID tuning rule: Kp = τ/(K·λ), Ki = 1/τ, to set the PID controller's 
+        Kp and Ki parameters by using the values from the model.
+        The computation uses λ ≈ τ/3 for an aggressive tune.
+      </p>
+      
       <div class="help-tip">
         <strong>USE MODEL toggle:</strong> When enabled, the model output replaces the
         sampled PV in the controller feedback path. Use this to test a control algorithm
