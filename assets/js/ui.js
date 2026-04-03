@@ -375,6 +375,7 @@ Core.on('reset', () => {
   $('modelOutputDisplay').textContent = '—';
   $('processOutputDisplay').textContent = '—';
 
+  _lastGraphicTime = -1;
   Sampler.reset();
   Controller.reset();
   Modeler.reset();
