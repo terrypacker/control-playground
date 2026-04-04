@@ -554,9 +554,10 @@ function init() {
   // ── Tune the PID controller using IMC-PID tuning rule: Kp = τ/(K·λ), Ki = 1/τ, where λ ≈ τ/3 ──
   $('btnTunePIDController').addEventListener('click', () => {
     const currentModel = Modeler.getCurrent();
+    const currentController = Controller.getCurrent();
     const info = $('modelFitInfo');
     const controllerPanel = $('panelController');
-    if(currentModel.name === 'FOPDT') {
+    if(currentModel.name === 'FOPDT' && currentController.name === 'PID') {
       const tau = currentModel.params.tau.value;
       const K = currentModel.params.K.value;
       const lambda = tau/3; //TODO Make 3 configurable
@@ -581,7 +582,7 @@ function init() {
 
       info.textContent = '✓ Controller Tuned. ' + 'Kp: ' + kp.toFixed(2) + ' Ki: ' + ki.toFixed(2);
     }else {
-      info.textContent = '✗ unable to tune controller from model type ' + currentModel.name;
+      info.textContent = '✗ unable to tune controller type ' + currentController.name + ' from model type ' + currentModel.name;
     }
   });
 
