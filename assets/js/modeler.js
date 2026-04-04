@@ -131,6 +131,15 @@ const Modeler = (() => {
   }
 
   function autoFit(history) {
+    switch(current) {
+      case 'fopdt':
+        return autoFitFOPDT(history);
+      default:
+        return { ok: false, msg: 'Auto fit not supported for model ' + current };
+    }
+  }
+
+  function autoFitFOPDT(history) {
     // Simple step-response identification using the history
     // Finds K, tau, theta from a step response in recent history
     if (history.length < 50) return { ok: false, msg: 'Not enough data (need 50+ samples)' };
